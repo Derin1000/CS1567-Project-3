@@ -1,6 +1,6 @@
 # CS1567 Project 3
 
-**Part 1: AprilTag Viewer**
+**Part 1: AprilTag Viewer**\n
 A node that perform the following:
 - Displays the video feed from the topic /image_raw using OpenCV
 - For each detected ApirlTag, draws lines along edges of the tag
