@@ -4,8 +4,8 @@
 
 A node that perform the following:
 - Displays the video feed from the topic /image_raw using OpenCV
-- For each detected ApirlTag, draws lines along edges of the tag
-- For each detected ApirlTag, draws the tag ID in the middle of the tag
+- For each detected AprilTag, draws lines along edges of the tag
+- For each detected AprilTag, draws the tag ID in the middle of the tag
 
 **Part 2: Search and Go**
 
