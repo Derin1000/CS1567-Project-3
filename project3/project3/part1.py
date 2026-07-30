@@ -28,6 +28,7 @@ class Part1(Node):
         
     def openCV_callback(self, msg):
         frame = self.br.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        cv2.rectangle(frame, (350, 20), (480, 150), (0, 255, 0), 3)
         cv2.imshow("Camera", frame)
         cv2.waitKey(1)
         
