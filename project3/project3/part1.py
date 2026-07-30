@@ -2,7 +2,9 @@ import rclpy
 from rclpy.node import Node
 import math
 from tf2_msgs.msg import TFMessage
+from sensor_msgs.msg import Image
 import cv2
+from cv_bridge import CvBridge
 
 class Part1(Node): 
     def __init__(self):
@@ -14,6 +16,20 @@ class Part1(Node):
             self.tf_callback,
             10)
         self.subscription
+        
+        self.subscription = self.create_subscription(
+            Image,
+            '/image_raw',
+            self.openCV_callback,
+            10)
+        self.subscription
+        
+        self.br = CvBridge()
+        
+    def openCV_callback(self, msg):
+        frame = self.br.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        cv2.imshow("Camera", frame)
+        cv2.waitKey(1)
         
     def tf_callback(self, msg):
         
