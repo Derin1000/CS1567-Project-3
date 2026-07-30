@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'part1.py = project3.part1:main',
         ],
     },
 )
