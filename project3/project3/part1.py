@@ -3,6 +3,7 @@ from rclpy.node import Node
 import math
 from tf2_msgs.msg import TFMessage
 from sensor_msgs.msg import Image
+from apriltag_msgs.msg import AprilTagDetectionArray
 import cv2
 from cv_bridge import CvBridge
 
@@ -24,13 +25,49 @@ class Part1(Node):
             10)
         self.subscription
         
+        self.subscription = self.create_subscription(
+            AprilTagDetectionArray,
+            '/detections',
+            self.corners_callback,
+            10)
+        self.subscription
+        
         self.br = CvBridge()
+        
+        self.rectangles = []
+        self.ids = []
+        self.centers = []
         
     def openCV_callback(self, msg):
         frame = self.br.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        cv2.rectangle(frame, (350, 20), (480, 150), (0, 255, 0), 3)
+        for i in range(len(self.rectangles)):
+            cv2.line(frame, self.rectangles[i][0], self.rectangles[i][1], (255, 0, 0), 2)
+            cv2.line(frame, self.rectangles[i][1], self.rectangles[i][2], (255, 0, 0), 2)
+            cv2.line(frame, self.rectangles[i][2], self.rectangles[i][3], (255, 0, 0), 2)
+            cv2.line(frame, self.rectangles[i][3], self.rectangles[i][0], (255, 0, 0), 2)
+            
+            cv2.putText(frame, str(self.ids[i]), self.centers[i], cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            
+        
         cv2.imshow("Camera", frame)
         cv2.waitKey(1)
+        
+    def corners_callback(self, msg):
+        rectangles = []
+        ids = []
+        centers = []
+        for tag in msg.detections:
+            ids.append(tag.id)
+            centers.append((int(tag.centre.x), int(tag.centre.y)))
+            curRect = []
+            for i in range(4):
+                curRect.append((int(tag.corners[i].x), int(tag.corners[i].y)))
+            
+            rectangles.append(curRect)
+            
+        self.ids = ids
+        self.rectangles = rectangles
+        self.centers = centers
         
     def tf_callback(self, msg):
         
