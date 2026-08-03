@@ -24,15 +24,34 @@ class FollowBreadcrumbsNode(Node):
             self.detections_callback,
             10)
 
-        self.BREADCRUMB_ID = 120
+        self.FINAL_TAG_ID = 20
+        self.STOP_DISTANCE = 0.5
+        self.IMAGE_WIDTH_CENTER = 320.0
 
-        self.tag_positions = {}
+        #controller gains
+        self.KP_ANGULAR = 0.003
+        self.KP_LINEAR = 0.3
 
-        #state variables
+        self.visible_tags = {}
+
         self.last_detection_time = self.get_clock().now()
+        self.TIMEOUT_THRESHOLD = 0.6
 
-        #main state control loop running at 10hz
-        self.timer = self.create_timer(0.1, self.state_machine)
+        self.current_cmd = Twist()
+
+        self.timer = self.create_timer(0.1, self.control_loop)
+
+    def detections_callback(self, msg):
+        if len(msg.detections) > 0: 
+            self.last_detection_time = self.get_clock().now()
+
+        for tag in msg.detections:
+            tag_id = tag.id
+            center_x = float(tag.centre.x)
+
+            if tag_id not in self.visible_tags:
+                self.visible_tags[tag_id] = {}
+            self.visible_tags[tag_id]['center_x'] = center_x
 
     def tf_callback(self, msg):
         for tag in msg.transforms:
@@ -41,10 +60,43 @@ class FollowBreadcrumbsNode(Node):
             except (IndexError, ValueError):
                 continue
 
-            x = tag.transform.translation.x
-            y = tag.transform.translation.y 
-            z = tag.transform.translation.z
+            z_dist = tag.transform.translation.z
 
-            #storing the 3D position of each tag
-            self.tag_positions[tag_id] = (x, y, z)
+            if tag_id not in self.visible_tags:
+                self.visible_tags[tag_id] = {}
+            self.visible_tags[tag_id]['z_dist'] = z_dist
             self.last_detection_time = self.get_clock().now()
+
+    def control_loop(self):
+        cmd = Twist()
+        now = self.get_clock().now()
+        time_since_last_detection = (now - self.last_detection_time).nanoseconds / 1e9
+
+        valid_ids = [
+            tag_id for tag_id, data in self.visible_tags.items()
+            if 'center_x' in data and 'z_dist' in data
+        ]
+
+        if valid_ids:
+            target_id = max(valid_ids)
+            target_data = self.visible_tags[target_id]
+
+            x_pixel = target_data['center_x']
+            z_dist = target_data['z_dist']
+
+            pixel_error = self.IMAGE_WIDTH_CENTER - x_pixel
+
+            if target_id == self.FINAL_TAG_ID and z_dist < self.STOP_DISTANCE:
+                self.get_logger().info(f"Reached Final AprilTag ({self.FINAL_TAG_ID})! Stopping.")
+                cmd.linear.x = 0.0
+                cmd.angular.z = 0.0
+            else:
+                cmd.angular.z = self.KP_ANGULAR * pixel_error
+
+                if z_dist > self.STOP_DISTANCE:
+                    distance_error = z_dist - self.STOP_DISTANCE
+                    cmd.linear.x = min(0.25, self.KP_LINEAR * distance_error)
+                cmd.linear.x = self.KP_LINEAR * z_dist
+
+                self.get_logger().info(f"Following AprilTag {target_id}: z_dist={z_dist:.2f}, pixel_error={pixel_error:.2f}")    
+            
