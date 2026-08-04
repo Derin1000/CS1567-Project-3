@@ -7,7 +7,7 @@ from apriltag_msgs.msg import AprilTagDetectionArray
 
 class FollowBreadcrumbsNode(Node):
     def __init__(self):
-        super().__init__('follow_crumbs_node')
+        super().__init__('follow_breadcrumbs_node')
 
         #velocity publisher
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
@@ -56,7 +56,7 @@ class FollowBreadcrumbsNode(Node):
     def tf_callback(self, msg):
         for tag in msg.transforms:
             try:
-                tag_id = int(tag.child_frame_id.split(':')[1])
+                tag_id = int(tag.child_frame_id.split(":")[1])
             except (IndexError, ValueError):
                 continue
 
@@ -84,6 +84,8 @@ class FollowBreadcrumbsNode(Node):
             x_pixel = target_data['center_x']
             z_dist = target_data['z_dist']
 
+            #calculate horizontal pixel error from center of image
+
             pixel_error = self.IMAGE_WIDTH_CENTER - x_pixel
 
             if target_id == self.FINAL_TAG_ID and z_dist < self.STOP_DISTANCE:
@@ -96,7 +98,30 @@ class FollowBreadcrumbsNode(Node):
                 if z_dist > self.STOP_DISTANCE:
                     distance_error = z_dist - self.STOP_DISTANCE
                     cmd.linear.x = min(0.25, self.KP_LINEAR * distance_error)
-                cmd.linear.x = self.KP_LINEAR * z_dist
+                else:
+                    cmd.linear.x = 0.0
 
-                self.get_logger().info(f"Following AprilTag {target_id}: z_dist={z_dist:.2f}, pixel_error={pixel_error:.2f}")    
-            
+            self.current_cmd = cmd
+            self.cmd_pub.publish(cmd)
+        else:
+            if time_since_last_detection < self.TIMEOUT_THRESHOLD:
+                self.cmd_pub.publish(self.current_cmd)
+            else:
+                cmd.linear.x = 0.0
+                cmd.angular.z = 0.0
+                self.cmd_pub.publish(cmd)
+            self.visible_tags.clear()
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = FollowBreadcrumbsNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+if __name__ == '__main__':
+    main()
