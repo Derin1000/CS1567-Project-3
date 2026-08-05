@@ -1,3 +1,5 @@
+from turtle import distance
+
 import rclpy
 from rclpy.node import Node
 import math
@@ -24,12 +26,15 @@ class SoccerPlayerNode(Node):
             self.detections_callback,
             10)
 
+        #constants for tag IDs
         self.LEFT_GOAL_ID = 117
         self.RIGHT_GOAL_ID = 118
         self.BALL_ID = 119
 
+        #track 3d tag locations relative to camera frame (x,y,z)
         self.tag_positions = {}
 
+        #state machine states: SCAN, ALIGN_SETUP, DRIVE_TO_SETUP, ALIGN_TO_GOAL, KICK, DONE
         self.state = 'SCAN'
 
         #state variables
@@ -39,12 +44,12 @@ class SoccerPlayerNode(Node):
         self.last_detection_time = self.get_clock().now()
 
         #main state control loop running at 10hz
-        self.timer = self.create_timer(0.1, self.state_machine)
+        self.timer = self.create_timer(0.1, self.control_loop)
 
     def tf_callback(self, msg):
         for tag in msg.transforms:
             try:
-                tag_id = int(tag.child_frame_id.split(':')[1])
+                tag_id = int(tag.child_frame_id.split(":")[1])
             except (IndexError, ValueError):
                 continue
 
@@ -78,7 +83,7 @@ class SoccerPlayerNode(Node):
             elif self.state == 'ALIGN_SETUP':
                 angle_error = math.atan2(self.setup_x, self.setup_z) 
 
-                if abs(angle_error) > 0.08:
+                if abs(angle_error) < 0.08:
                     self.state = 'DRIVE_TO_SETUP'
 
                 else:
@@ -92,24 +97,6 @@ class SoccerPlayerNode(Node):
                     self.get_logger().info("In position behind ball. Rotating toward goal center...")
                     self.state = 'ALIGN_TO_GOAL'
                 else:
-                    cmd.linear.x = min(0.2, 0.4 * distance)
-                    cmd.angular.z = -1.0 * angle_error
-            elif self.state == 'ALIGN_TO_GOAL':
-                if self.BALL_ID in self.tag_positions:
-                    ball_x, _, _ = self.tag_positions[self.BALL_ID]
-                    angle_to_ball = math.atan2(ball_x, 1.0)
-
-                    if abs(angle_to_ball) < 0.05:
-                        self.get_logger().info("Aligned to goal! Kicking!")
-                        self.state = 'KICK'
-                        self.kick_start_time = self.get_clock().now()
-                    else:
-                        cmd.angular.z = -1.0 * angle_to_ball
-
-                if distance < 0.15:
-                    self.get_logger().info("In position behind ball. Rotating toward goal center...")
-                    self.state = 'ALIGN_TO_GOAL'
-                else: 
                     cmd.linear.x = min(0.2, 0.4 * distance)
                     cmd.angular.z = -1.0 * angle_error
 
@@ -131,7 +118,6 @@ class SoccerPlayerNode(Node):
                 elapsed = (self.get_clock().now() - self.kick_start_time).nanoseconds / 1e9
                 if elapsed < 3.0:
                     cmd.linear.x = 0.35 # kick forward
-
                 else:
                     self.get_logger().info("Goal scored! Stopping...")
                     self.state = 'DONE'
@@ -142,40 +128,40 @@ class SoccerPlayerNode(Node):
 
                 self.cmd_pub.publish(cmd)
 
-            def calculate_setup_position(self):
-                lx, _, lz = self.tag_positions[self.LEFT_GOAL_ID]
-                rx, _, rz = self.tag_positions[self.RIGHT_GOAL_ID]
-                bx, _, bz = self.tag_positions[self.BALL_ID]
+        def calculate_setup_position(self):
+            lx, _, lz = self.tag_positions[self.LEFT_GOAL_ID]
+            rx, _, rz = self.tag_positions[self.RIGHT_GOAL_ID]
+            bx, _, bz = self.tag_positions[self.BALL_ID]
 
-                #1. goal center point
-                goal_x = (lx + rx) / 2.0
-                goal_z = (lz + rz) / 2.0
+            #1. goal center point
+            goal_x = (lx + rx) / 2.0
+            goal_z = (lz + rz) / 2.0
 
-                #2. vector from ball to goal center
-                vec_x = goal_x - bx
-                vec_z = goal_z - bz
-                length = math.hypot(vec_x, vec_z)
+            #2. vector from ball to goal center
+            vec_x = goal_x - bx
+            vec_z = goal_z - bz
+            length = math.hypot(vec_x, vec_z)
 
-                #direction vector from ball to goal center
-                dir_x = vec_x / length
-                dir_z = vec_z / length
+            #3. normalized direction vector
+            dir_x = vec_x / length
+            dir_z = vec_z / length
 
-                #3. position robot 0.4 meters behind the ball to the goal
-                offset_distance = 0.4
-                self.setup_x = bx - (dir_x * offset_distance)
-                self.setup_z = bz - (dir_z * offset_distance)
+            #3. position robot 0.4 meters behind the ball to the goal
+            offset_distance = 0.4
+            self.setup_x = bx - (dir_x * offset_distance)
+            self.setup_z = bz - (dir_z * offset_distance)
 
-        def main(args=None):
-            rclpy.init(args=args)
-            node = SoccerPlayerNode()
-            try:
-                rclpy.spin(node)
-            except KeyboardInterrupt:
-                pass
-            finally:
-                node.destroy_node()
-                if rclpy.ok():
-                    rclpy.shutdown()
+def main(args=None):
+    rclpy.init(args=args)
+    node = SoccerPlayerNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
-        if __name__ == '__main__':
-            main()
+if __name__ == '__main__':
+    main()

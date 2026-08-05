@@ -110,7 +110,8 @@ class FollowBreadcrumbsNode(Node):
                 cmd.linear.x = 0.0
                 cmd.angular.z = 0.0
                 self.cmd_pub.publish(cmd)
-            self.visible_tags.clear()
+
+        self.visible_tags.clear()
 
 def main(args=None):
     rclpy.init(args=args)
@@ -123,5 +124,6 @@ def main(args=None):
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
+            
 if __name__ == '__main__':
     main()
