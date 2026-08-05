@@ -83,6 +83,7 @@ class SoccerPlayerNode(Node):
                 cmd.angular.z = 0.25 # keep spinning slowly to find all tags
 
         elif self.state == 'ALIGN_SETUP':
+            print('State: ALIGN_SETUP')
             angle_error = math.atan2(self.setup_x, self.setup_z) 
 
             if abs(angle_error) < 0.08:
@@ -128,9 +129,10 @@ class SoccerPlayerNode(Node):
             cmd.linear.x = 0.0
             cmd.angular.z = 0.0
 
-            self.cmd_pub.publish(cmd)
+        self.cmd_pub.publish(cmd)
 
     def calculate_setup_position(self):
+        print('go to calculate_setup_position')
         lx, _, lz = self.tag_positions[self.LEFT_GOAL_ID]
         rx, _, rz = self.tag_positions[self.RIGHT_GOAL_ID]
         bx, _, bz = self.tag_positions[self.BALL_ID]
