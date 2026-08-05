@@ -2,14 +2,9 @@ import rclpy
 from rclpy.node import Node
 import math
 from tf2_msgs.msg import TFMessage
-from sensor_msgs.msg import Image
 from apriltag_msgs.msg import AprilTagDetectionArray
-#import cv2
-#from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 from std_msgs.msg import String
-from nav_msgs.msg import Odometry
-from std_msgs.msg import Empty
 import sys
 
 class Part2(Node): 
@@ -23,43 +18,31 @@ class Part2(Node):
             10)
         self.subscription
         
-        #self.subscription = self.create_subscription(
-        #    Image,
-        #    '/image_raw',
-        #    self.openCV_callback,
-        #    10)
-        #self.subscription
-        
-        #self.subscription = self.create_subscription(
-        #    AprilTagDetectionArray,
-        #    '/detections',
-        #    self.corners_callback,
-        #    10)
-        #self.subscription
+
         
         self.pub = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.pub_reset = self.create_publisher(Empty, '/commands/reset_odometry', 10)
+
         self.pub_vel = self.create_publisher(Twist, '/cmd_vel', 10)
         
         self.timer = self.create_timer(0.1, self.move_callback)
         
-        #instance variables for velocity constants
+
         self.current_linear = 0.0
         self.current_angular = 0.0
         
         self.target_linear = 0.0
         self.target_angular = 0.8
         
-        #current orientation via odometry
+
         self.x_pos = 0.0
         self.y_pos = 0.0
         self.angular_pos = 0.0
         
-        #self.br = CvBridge()
+
         
-        #self.rectangles = []
+
         self.ids = []
-        #self.centers = []
+
         
         self.target_id = -1
         self.target_lock = False
@@ -70,14 +53,10 @@ class Part2(Node):
         self.delta_angular = 0.1 #0.2
         
         self.decel = False
+        self.init_y = -1
         
     def move_callback(self):
         cmd = Twist()
-        
-        
-        #if not self.target_lock:   #if target apriltag hasn't been identified, keep turning
-        #    self.target_linear = 0.0
-        #    self.target_angular = 0.2
         
         print(self.target_lock, " ", self.target_pos[1])
     
@@ -92,17 +71,17 @@ class Part2(Node):
                 self.target_angular = 0.2
             print('\tTURNING: ', self.target_pos[0])
         
-        if self.target_lock and self.target_pos[1] <= 0.35:
+        if self.target_lock and abs(self.target_pos[1] - self.init_y) <= 0.07:
             self.target_linear = 0.0
-            if self.current_linear <= 0.05 and self.decel:
+            if self.current_linear <= 0.07 and self.decel:
                 sys.exit(0)
         
-        #if self.target_angular != self.current_angular:    #angular move - update angular speed
+        #angular move - update angular speed
         print(self.target_angular, " ", self.current_angular)
         if abs(self.target_angular - self.current_angular) < self.delta_angular:
             self.current_angular = self.target_angular
             if self.target_angular == 0:
-                self.target_linear = 0.1
+                self.target_linear = 0.3
         else:
             if self.target_angular > self.current_angular:
                 self.current_angular += self.delta_angular
@@ -131,36 +110,7 @@ class Part2(Node):
         
         self.prev_angular = self.angular_pos
         
-    #def openCV_callback(self, msg):
-    #    frame = self.br.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-    #    for i in range(len(self.rectangles)):
-    #        cv2.line(frame, self.rectangles[i][0], self.rectangles[i][1], (255, 0, 0), 2)
-    #        cv2.line(frame, self.rectangles[i][1], self.rectangles[i][2], (255, 0, 0), 2)
-    #        cv2.line(frame, self.rectangles[i][2], self.rectangles[i][3], (255, 0, 0), 2)
-    #        cv2.line(frame, self.rectangles[i][3], self.rectangles[i][0], (255, 0, 0), 2)
-    #        
-    #        cv2.putText(frame, str(self.ids[i]), self.centers[i], cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-    #        
-    #    
-    #    cv2.imshow("Camera", frame)
-    #    cv2.waitKey(1)
-        
-    #def corners_callback(self, msg):
-    #    rectangles = []
-    #    ids = []
-    #    centers = []
-    #    for tag in msg.detections:
-    #        ids.append(tag.id)
-    #        centers.append((int(tag.centre.x), int(tag.centre.y)))
-    #        curRect = []
-    #        for i in range(4):
-    #            curRect.append((int(tag.corners[i].x), int(tag.corners[i].y)))
-    #        
-    #        rectangles.append(curRect)
-    #        
-    #    self.ids = ids
-    #    self.rectangles = rectangles
-    #    self.centers = centers
+    
         
     def tf_callback(self, msg):
         if not self.target_lock or self.linear_move:
@@ -187,31 +137,18 @@ class Part2(Node):
                         print('DETECTED')
                         self.target_lock = True
                         self.target_pos = (x, y, z)
+                        self.init_y = y
                         break
                 
                 
                 #print(f"id: {tagID} - location: ({x} , {y}, {z}) - ({roll}, {pitch}, {yaw}): ({math.degrees(roll)}, {math.degrees(pitch)}, {math.degrees(yaw)})")
             
-    def odom_callback(self, msg):
-            x = msg.pose.pose.position.x
-            y = msg.pose.pose.position.y
-            z = msg.pose.pose.orientation.z
-            w = msg.pose.pose.orientation.w
-            siny_cosp = 2 * w * z
-            cosy_cosp = 1 - 2 * z * z
-            yaw = math.atan2(siny_cosp, cosy_cosp)
-            degree = yaw * 180 / math.pi
-            #print ('x: %f y: %f Orientation: %f' % (x, y, degree))
-            self.x_pos = x
-            self.y_pos = y
-            self.angular_pos = degree
         
 
 def main(args=None):
     rclpy.init(args=args)
     aNode = Part2()
     try:
-        aNode.pub_reset.publish(Empty())
         aNode.target_id = int(input("Target AprilTagID: "))
         rclpy.spin(aNode)
         
