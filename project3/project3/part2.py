@@ -10,6 +10,7 @@ from geometry_msgs.msg import Twist
 from std_msgs.msg import String
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Empty
+import sys
 
 class Part2(Node): 
     def __init__(self):
@@ -62,12 +63,13 @@ class Part2(Node):
         
         self.target_id = -1
         self.target_lock = False
+        self.linear_move = False
         self.target_pos = (-1, -1, -1)
         
         self.delta_linear = 0.05 #0.1
         self.delta_angular = 0.1 #0.2
         
-        #self.decel_pos_ang = 0
+        self.decel = False
         
     def move_callback(self):
         cmd = Twist()
@@ -76,33 +78,46 @@ class Part2(Node):
         #if not self.target_lock:   #if target apriltag hasn't been identified, keep turning
         #    self.target_linear = 0.0
         #    self.target_angular = 0.2
+        
+        print(self.target_lock, " ", self.target_pos[1])
     
         if self.target_pos[0] <= 0.01 and self.target_pos[0] != -1:
             self.target_angular = 0.0
+            self.linear_move = True
         
-        if self.target_lock and self.target_pos[1] <= 0.055:
+        if self.linear_move:
+            if self.target_pos[0] > 0.01:
+                self.target_angular = -0.2
+            elif self.target_pos[0] < -0.01:
+                self.target_angular = 0.2
+            print('\tTURNING: ', self.target_pos[0])
+        
+        if self.target_lock and self.target_pos[1] <= 0.35:
             self.target_linear = 0.0
+            if self.current_linear <= 0.05 and self.decel:
+                sys.exit(0)
         
-        if self.target_angular != self.current_angular:    #angular move - update angular speed
-            print(self.target_angular, " ", self.current_angular)
-            if abs(self.target_angular - self.current_angular) < self.delta_angular:
-                self.current_angular = self.target_angular
-                if self.target_angular == 0:
-                    self.target_linear = 0.5
-            else:
-                if self.target_angular > self.current_angular:
-                    self.current_angular += self.delta_angular
-                elif self.target_angular < self.current_angular:
-                    self.current_angular -= self.delta_angular
+        #if self.target_angular != self.current_angular:    #angular move - update angular speed
+        print(self.target_angular, " ", self.current_angular)
+        if abs(self.target_angular - self.current_angular) < self.delta_angular:
+            self.current_angular = self.target_angular
+            if self.target_angular == 0:
+                self.target_linear = 0.1
+        else:
+            if self.target_angular > self.current_angular:
+                self.current_angular += self.delta_angular
+            elif self.target_angular < self.current_angular:
+                self.current_angular -= self.delta_angular
                     
        
         if abs(self.target_linear - self.current_linear) < self.delta_linear:       #linear move - update linear speed
             self.current_linear = self.target_linear
         else:
-            if self.target_linear > self.current_linear:
+            if self.target_linear > self.current_linear and not self.decel:
                 self.current_linear += self.delta_linear
             elif self.target_linear < self.current_linear:
                 self.current_linear -= self.delta_linear
+                self.decel = True
                     
             
             
@@ -148,7 +163,7 @@ class Part2(Node):
     #    self.centers = centers
         
     def tf_callback(self, msg):
-        if not self.target_lock:
+        if not self.target_lock or self.linear_move:
             for tag in msg.transforms:
                 if ":" in tag.child_frame_id:
                     
