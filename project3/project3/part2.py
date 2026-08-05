@@ -49,11 +49,14 @@ class Part2(Node):
         self.linear_move = False
         self.target_pos = (-1, -1, -1)
         
-        self.delta_linear = 0.05 #0.1
+        self.delta_linear = 0.025 #0.1
         self.delta_angular = 0.1 #0.2
         
         self.decel = False
         self.init_y = -1
+        self.peak_speed_reached = False
+        
+
         
     def move_callback(self):
         cmd = Twist()
@@ -71,17 +74,18 @@ class Part2(Node):
                 self.target_angular = 0.2
             print('\tTURNING: ', self.target_pos[0])
         
-        if self.target_lock and abs(self.target_pos[1] - self.init_y) <= 0.07:
+        if self.target_lock and self.peak_speed_reached and abs(self.target_pos[1] - self.init_y) <= 0.4 and self.target_linear > 0:
             self.target_linear = 0.0
-            if self.current_linear <= 0.07 and self.decel:
+            print(self.target_pos[1])
+            if self.current_linear <= 0.03 and self.decel:
                 sys.exit(0)
         
         #angular move - update angular speed
         print(self.target_angular, " ", self.current_angular)
         if abs(self.target_angular - self.current_angular) < self.delta_angular:
             self.current_angular = self.target_angular
-            if self.target_angular == 0:
-                self.target_linear = 0.3
+            if self.target_angular == 0 and not self.decel:
+                self.target_linear = 0.5
         else:
             if self.target_angular > self.current_angular:
                 self.current_angular += self.delta_angular
@@ -91,6 +95,8 @@ class Part2(Node):
        
         if abs(self.target_linear - self.current_linear) < self.delta_linear:       #linear move - update linear speed
             self.current_linear = self.target_linear
+            if self.target_linear == 0.5:
+                self.peak_speed_reached = True
         else:
             if self.target_linear > self.current_linear and not self.decel:
                 self.current_linear += self.delta_linear
@@ -113,9 +119,11 @@ class Part2(Node):
     
         
     def tf_callback(self, msg):
+
         if not self.target_lock or self.linear_move:
             for tag in msg.transforms:
                 if ":" in tag.child_frame_id:
+
                     
                     x = tag.transform.rotation.x
                     y = tag.transform.rotation.y
