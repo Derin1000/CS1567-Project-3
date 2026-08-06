@@ -18,14 +18,15 @@ class FollowBreadcrumbsNode(Node):
             self.tf_callback,
             10)
 
-        self.FINAL_TAG_ID = 20
+        self.FINAL_TAG_ID = 108
         self.STOP_DISTANCE = 0.5
         self.PAUSE_DURATION = 1.5   
 
+        # store tags with timestamps: {tag_id: (x, y, z, timestamp)}
         self.visible_tags = {}
-        self.last_detection_time = self.get_clock().now()
 
         #target track state
+        self.last_detection_time = self.get_clock().now()
         self.current_target_id = None
         self.is_pausing = False
         self.pause_start_time = None
