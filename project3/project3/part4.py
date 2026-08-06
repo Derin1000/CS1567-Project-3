@@ -17,54 +17,27 @@ class FollowBreadcrumbsNode(Node):
             '/tf',
             self.tf_callback,
             10)
-        
-        self.detections_sub = self.create_subscription(
-            AprilTagDetectionArray,
-            '/detections',
-            self.detections_callback,
-            10)
 
         self.FINAL_TAG_ID = 20
         self.STOP_DISTANCE = 0.5
-        self.IMAGE_WIDTH_CENTER = 320.0
-
-        #controller gains
-        self.KP_ANGULAR = 0.003
-        self.KP_LINEAR = 0.3
 
         self.visible_tags = {}
-
         self.last_detection_time = self.get_clock().now()
-        self.TIMEOUT_THRESHOLD = 0.6
-
-        self.current_cmd = Twist()
 
         self.timer = self.create_timer(0.1, self.control_loop)
 
-    def detections_callback(self, msg):
-        if len(msg.detections) > 0: 
-            self.last_detection_time = self.get_clock().now()
-
-        for tag in msg.detections:
-            tag_id = tag.id
-            center_x = float(tag.centre.x)
-
-            if tag_id not in self.visible_tags:
-                self.visible_tags[tag_id] = {}
-            self.visible_tags[tag_id]['center_x'] = center_x
-
     def tf_callback(self, msg):
-        for tag in msg.transforms:
+        for tag in msg.detections:
             try:
                 tag_id = int(tag.child_frame_id.split(":")[1])
             except (IndexError, ValueError):
                 continue
 
-            z_dist = tag.transform.translation.z
+            x = tag.transform.translation.x
+            y = tag.transform.translation.y
+            z = tag.transform.translation.z
 
-            if tag_id not in self.visible_tags:
-                self.visible_tags[tag_id] = {}
-            self.visible_tags[tag_id]['z_dist'] = z_dist
+            self.visible_tags[tag_id] = (x, y, z)
             self.last_detection_time = self.get_clock().now()
 
     def control_loop(self):
@@ -72,46 +45,28 @@ class FollowBreadcrumbsNode(Node):
         now = self.get_clock().now()
         time_since_last_detection = (now - self.last_detection_time).nanoseconds / 1e9
 
-        valid_ids = [
-            tag_id for tag_id, data in self.visible_tags.items()
-            if 'center_x' in data and 'z_dist' in data
-        ]
+        if self.visible_tags:
+            target_id = max(self.visible_tags.keys())
+            x, y, z = self.visible_tags[target_id]
 
-        if valid_ids:
-            target_id = max(valid_ids)
-            target_data = self.visible_tags[target_id]
+            angle_error = math.atan2(x,z)
+            distance = math.hypot(x,z)
 
-            x_pixel = target_data['center_x']
-            z_dist = target_data['z_dist']
-
-            #calculate horizontal pixel error from center of image
-
-            pixel_error = self.IMAGE_WIDTH_CENTER - x_pixel
-
-            if target_id == self.FINAL_TAG_ID and z_dist < self.STOP_DISTANCE:
+            if target_id == self.FINAL_TAG_ID and distance < self.STOP_DISTANCE:
                 self.get_logger().info(f"Reached Final AprilTag ({self.FINAL_TAG_ID})! Stopping.")
                 cmd.linear.x = 0.0
                 cmd.angular.z = 0.0
             else:
-                cmd.angular.z = self.KP_ANGULAR * pixel_error
-
-                if z_dist > self.STOP_DISTANCE:
-                    distance_error = z_dist - self.STOP_DISTANCE
-                    cmd.linear.x = min(0.25, self.KP_LINEAR * distance_error)
+                if distance > self.STOP_DISTANCE:
+                    cmd.linear.x = min(0.2, 0.35 * (distance - self.STOP_DISTANCE))
+                    cmd.angular.z = -0.8 * angle_error
                 else:
-                    cmd.linear.x = 0.0
+                    cmd.angular.z = 0.25
+        else: 
+            if time_since_last_detection > 0.8:
+                cmd.angular.z = 0.25
 
-            self.current_cmd = cmd
-            self.cmd_pub.publish(cmd)
-        else:
-            if time_since_last_detection < self.TIMEOUT_THRESHOLD:
-                self.cmd_pub.publish(self.current_cmd)
-            else:
-                cmd.linear.x = 0.0
-                cmd.angular.z = 0.0
-                self.cmd_pub.publish(cmd)
-
-        self.visible_tags.clear()
+        self.cmd_pub.publish(cmd)     
 
 def main(args=None):
     rclpy.init(args=args)
