@@ -89,13 +89,17 @@ class FollowBreadcrumbsNode(Node):
                         self.is_pausing = True
                         self.pause_start_time = now
                         self.current_target_id += 1
-                else:
-                    cmd.angular.z = 0.25
+                else: # ensures the robot moves towards the tag
+                    cmd.linear.x = min(0.2, 0.35 * (distance - self.STOP_DISTANCE))
+                    cmd.angular.z = -0.8 * angle_error
+            
             else:
-                if time_since_last_detection > 0.8:
-                    cmd.angular.z = 0.25
+                cmd.angular.z = 0.25
+        else:
+            if time_since_last_detection > 0.8:
+                cmd.angular.z = 0.25
 
-            self.cmd_pub.publish(cmd)
+        self.cmd_pub.publish(cmd)
 
 def main(args=None):
     rclpy.init(args=args)
