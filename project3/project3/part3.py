@@ -39,7 +39,7 @@ class SoccerPlayerNode(Node):
 
         #state variables
         self.setup_x = 0.0
-        self.setup_y = 0.0
+        self.setup_z = 0.0
         self.kick_target_x = None
         self.last_detection_time = self.get_clock().now()
 
@@ -121,6 +121,11 @@ class SoccerPlayerNode(Node):
             else:
                 self.get_logger().info("Goal scored! Stopping...")
                 self.state = 'DONE'
+                
+            for tag in self.tag_positions:      #Derin
+                if cmd.linear.x > 0 and abs(x[1]) <= 0.3:
+                    cmd.linear.x = 0.0
+                    break
 
         elif self.state == 'DONE':
             cmd.linear.x = 0.0
